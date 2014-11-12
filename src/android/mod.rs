@@ -1,10 +1,10 @@
-extern crate android_glue;
 extern crate native;
 
 use libc;
 use {CreationError, OsError, Event, WindowBuilder};
 
 pub struct Window {
+    native_display: ffi::Display,
     display: ffi::egl::types::EGLDisplay,
     context: ffi::egl::types::EGLContext,
     surface: ffi::egl::types::EGLSurface,
@@ -38,10 +38,8 @@ impl Window {
     pub fn new(_builder: WindowBuilder) -> Result<Window, CreationError> {
         use std::{mem, ptr};
 
-        let native_window = unsafe { android_glue::get_native_window() };
-        if native_window.is_null() {
-            return Err(OsError(format!("Android's native window is null")));
-        }
+        let mut native_window = ptr::null();
+        let native_display = unsafe { ffi::display_create(&mut native_window) };
 
         let display = unsafe {
             let display = ffi::egl::GetDisplay(mem::transmute(ffi::egl::DEFAULT_DISPLAY));
@@ -50,8 +48,6 @@ impl Window {
             }
             display
         };
-
-        android_glue::write_log("eglGetDisplay succeeded");
 
         let (_major, _minor) = unsafe {
             let mut major: ffi::egl::types::EGLint = mem::uninitialized();
@@ -64,13 +60,13 @@ impl Window {
             (major, minor)
         };
 
-        android_glue::write_log("eglInitialize succeeded");
-
         let config = unsafe {
             let attribute_list = [
-                ffi::egl::RED_SIZE as i32, 1,
-                ffi::egl::GREEN_SIZE as i32, 1,
-                ffi::egl::BLUE_SIZE as i32, 1,
+                ffi::egl::RED_SIZE as i32, 8,
+                ffi::egl::GREEN_SIZE as i32, 8,
+                ffi::egl::BLUE_SIZE as i32, 8,
+                ffi::egl::ALPHA_SIZE as i32, 8,
+                ffi::egl::SURFACE_TYPE as i32, ffi::egl::WINDOW_BIT as i32,
                 ffi::egl::NONE as i32
             ];
 
@@ -89,8 +85,6 @@ impl Window {
             config
         };
 
-        android_glue::write_log("eglChooseConfig succeeded");
-
         let context = unsafe {
             let context = ffi::egl::CreateContext(display, config, ptr::null(), ptr::null());
             if context.is_null() {
@@ -99,8 +93,6 @@ impl Window {
             context
         };
 
-        android_glue::write_log("eglCreateContext succeeded");
-
         let surface = unsafe {
             let surface = ffi::egl::CreateWindowSurface(display, config, native_window, ptr::null());
             if surface.is_null() {
@@ -108,10 +100,9 @@ impl Window {
             }
             surface
         };
-        
-        android_glue::write_log("eglCreateWindowSurface succeeded");
 
         Ok(Window {
+            native_display: native_display,
             display: display,
             context: context,
             surface: surface,
@@ -139,16 +130,8 @@ impl Window {
     }
 
     pub fn get_inner_size(&self) -> Option<(uint, uint)> {
-        let native_window = unsafe { android_glue::get_native_window() };
+        panic!("todo");
 
-        if native_window.is_null() {
-            None
-        } else {
-            Some((
-                unsafe { ffi::ANativeWindow_getWidth(native_window) } as uint,
-                unsafe { ffi::ANativeWindow_getHeight(native_window) } as uint
-            ))
-        }
     }
 
     pub fn get_outer_size(&self) -> Option<(uint, uint)> {
@@ -190,7 +173,7 @@ impl Window {
 
     pub fn swap_buffers(&self) {
         unsafe {
-            ffi::egl::SwapBuffers(self.display, self.surface);
+            ffi::display_swap_buffers(self.native_display, self.display, self.surface);
         }
     }
 
@@ -205,7 +188,6 @@ impl Drop for Window {
         use std::ptr;
 
         unsafe {
-            android_glue::write_log("Destroying gl-init window");
             ffi::egl::MakeCurrent(self.display, ptr::null(), ptr::null(), ptr::null());
             ffi::egl::DestroySurface(self.display, self.surface);
             ffi::egl::DestroyContext(self.display, self.context);

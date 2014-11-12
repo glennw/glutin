@@ -18,9 +18,6 @@ git = "https://github.com/bjz/gl-rs"
 [dependencies.gl_common]
 git = "https://github.com/bjz/gl-rs"
 
-[target.arm-linux-androideabi.dependencies.android_glue]
-git = "https://github.com/tomaka/android-rs-glue"
-
 [target.i686-apple-darwin.dependencies.cocoa]
 git = "https://github.com/DavidPartouche/rust-cocoa"
 

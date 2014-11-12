@@ -1,2 +1,3 @@
 [target.arm-linux-androideabi]
-linker = "deps/apk-builder/apk-builder/target/apk-builder"
+ar = "arm-linux-androideabi-ar"
+linker = "arm-linux-androideabi-g++"

@@ -7,7 +7,7 @@ use std::cell::Cell;
 use std::sync::atomic::AtomicBool;
 use std::collections::RingBuf;
 use super::ffi;
-use std::sync::{Arc, Once, ONCE_INIT};
+use std::sync::{Arc, Once, ONCE_INIT, Weak};
 
 pub use self::monitor::{MonitorID, get_available_monitors, get_primary_monitor};
 
@@ -35,7 +35,7 @@ fn ensure_thread_init() {
 fn with_c_str<F, T>(s: &str, f: F) -> T where F: FnOnce(*const libc::c_char) -> T {
     use std::ffi::CString;
     let c_str = CString::from_slice(s.as_bytes());
-    f(c_str.as_slice_with_nul().as_ptr())    
+    f(c_str.as_slice_with_nul().as_ptr())
 }
 
 struct XWindow {
@@ -48,6 +48,9 @@ struct XWindow {
     ic: ffi::XIC,
     im: ffi::XIM,
 }
+
+unsafe impl Send for XWindow {}
+unsafe impl Sync for XWindow {}
 
 unsafe impl Send for Window {}
 unsafe impl Sync for Window {}
@@ -73,25 +76,30 @@ impl Drop for XWindow {
 
 #[derive(Clone)]
 pub struct WindowProxy {
-    x: Arc<XWindow>,
+    x: Weak<XWindow>,
 }
 
 impl WindowProxy {
     pub fn wakeup_event_loop(&self) {
-        let mut xev = ffi::XClientMessageEvent {
-            type_: ffi::ClientMessage,
-            window: self.x.window,
-            format: 32,
-            message_type: 0,
-            serial: 0,
-            send_event: 0,
-            display: self.x.display,
-            l: [0, 0, 0, 0, 0],
-        };
+        match self.x.upgrade() {
+            Some(x) => {
+                let mut xev = ffi::XClientMessageEvent {
+                    type_: ffi::ClientMessage,
+                    window: x.window,
+                    format: 32,
+                    message_type: 0,
+                    serial: 0,
+                    send_event: 0,
+                    display: x.display,
+                    l: [0, 0, 0, 0, 0],
+                };
 
-        unsafe {
-            ffi::XSendEvent(self.x.display, self.x.window, 0, 0, mem::transmute(&mut xev));
-            ffi::XFlush(self.x.display);
+                unsafe {
+                    ffi::XSendEvent(x.display, x.window, 0, 0, mem::transmute(&mut xev));
+                    ffi::XFlush(x.display);
+                }
+            }
+            None => {}
         }
     }
 }
@@ -440,7 +448,7 @@ impl Window {
 
     pub fn create_window_proxy(&self) -> WindowProxy {
         WindowProxy {
-            x: self.x.clone()
+            x: self.x.downgrade()
         }
     }
 

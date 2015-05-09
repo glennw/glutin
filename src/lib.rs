@@ -61,7 +61,7 @@ extern crate x11_dl;
 pub use events::*;
 pub use headless::{HeadlessRendererBuilder, HeadlessContext};
 #[cfg(feature = "window")]
-pub use window::{WindowBuilder, Window, WindowProxy, PollEventsIterator, WaitEventsIterator};
+pub use window::{WindowBuilder, Window, WindowID, WindowProxy, PollEventsIterator, WaitEventsIterator};
 #[cfg(feature = "window")]
 pub use window::{AvailableMonitorsIter, MonitorID, get_available_monitors, get_primary_monitor};
 #[cfg(feature = "window")]
@@ -381,7 +381,8 @@ pub struct BuilderAttribs<'a> {
     srgb: Option<bool>,
     transparent: bool,
     decorations: bool,
-    multitouch: bool
+    multitouch: bool,
+    parent: *mut libc::c_void,
 }
 
 impl BuilderAttribs<'static> {
@@ -408,7 +409,8 @@ impl BuilderAttribs<'static> {
             srgb: None,
             transparent: false,
             decorations: true,
-            multitouch: false
+            multitouch: false,
+            parent: std::ptr::null_mut(),
         }
     }
 }
@@ -440,7 +442,8 @@ impl<'a> BuilderAttribs<'a> {
             srgb: self.srgb,
             transparent: self.transparent,
             decorations: self.decorations,
-            multitouch: self.multitouch
+            multitouch: self.multitouch,
+            parent: self.parent,
         };
 
         (new_attribs, sharing)
